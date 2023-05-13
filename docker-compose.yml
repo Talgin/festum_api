@@ -1,0 +1,21 @@
+version: '3'
+services:
+  festum_api:
+    image: talgin/face_api_image:v1.1
+    container_name: festum_api
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ${PWD}:/app
+      - /home/talgat/PROJECTS/APIs/festum/crops:/crops
+      - /home/talgat/PROJECTS/APIs/festum/final_index:/final_index
+    working_dir: /app
+    shm_size: 1g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    environment:
+      - LC_ALL=C.UTF-8
+      - LANG=C.UTF-8
+    # command: gunicorn main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:9999 --forwarded-allow-ips "*" --workers 6 --log-level debug --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 2222 --forwarded-allow-ips "*" --workers 2 --log-level debug --reload
