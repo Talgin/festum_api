@@ -1,5 +1,5 @@
 ## API for Festum App
-The implementation of Festum API using FastAPI.
+The implementation of Festum API using FastAPI. Festum is the Latin word for 'feast, party in celebration of something'.
 
 ### Installation
 > git clone https://github.com/Talgin/festum_api.git
