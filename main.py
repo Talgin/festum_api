@@ -68,7 +68,8 @@ else:
 async def upload_images(images: List[UploadFile] = File(...)):
     file_names = []
     for image in images:
-        contents = await image.read()
+        # grab the uploaded image
+        data = await image.read()
         # Save the image to disk or process it as needed
         # You can use the `image.filename` attribute to get the original filename
 
@@ -78,4 +79,56 @@ async def upload_images(images: List[UploadFile] = File(...)):
             f.write(contents)
         file_names.append(file_name)
 
+        # compare each uploaded face with database - get top 1 from database for the person
+        # then we can take this top 1 and say that the person looks like the person from database
+        # we have to set some threshold for this
+
+        #print('data_type:', type(data))
+        unique_id = str(round(time.time() * 1000000))
+        name = file.filename
+        image = np.asarray(bytearray(data), dtype="uint8")
+        image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+        print('Image shape:', image.shape)
+        faces, landmarks = detector.detect(image, name, 0, settings.DETECTION_THRESHOLD)
+        if faces.shape[0] > 0:
+            match_list = {}
+            feature_list = []
+            for i in range(faces.shape[0]):
+                box = faces[i].astype(np.int)
+                # Getting the size of head rectangle
+                height_y = box[3] - box[1]
+                width_x = box[2] - box[0]
+                # Calculating cropping area
+                if landmarks is not None and height_y > 40:
+                    center_y = box[1] + ((box[3] - box[1])/2)
+                    center_x = box[0] + ((box[2] - box[0])/2)
+                    rect_y = int(center_y - height_y/2)
+                    rect_x = int(center_x - width_x/2)
+                    # Get face alignment
+                    landmark5 = landmarks[i].astype(np.int)
+                    aligned = align_img(image, landmark5)
+                    # Get 512-d embedding from aligned image
+                    feature = recognizer.get_feature(aligned, unique_id+'_'+name, 0)
+                    feature_list.append(feature)
+                else:
+                    return {'result': False, 'message': 'Face not detected or sharp angle'}
+
+            if faiss_index.ntotal > 0 and feature_list:
+                # distances, indexes = db_worker.search_from_blacklist_faiss_top_1(faiss_index, feature, 1, threshold)
+                distances, indexes = db_worker.search_faiss_multiple_vectors(faiss_index, feature_list, threshold)
+            else:
+                message = {'result': False, 'message': 'Faiss index is empty.', 'data': None}
+                return message
+            if indexes:
+                print(indexes, distances)
+                message = {'result': True, 'message': 'Success', 'name': str(indexes), 'faces': faces.shape[0]}
+                return message
+            else:
+                message = {'result': False, 'message': 'Not found', 'name': "", 'faces': faces.shape[0]}
+                return message
+        # compare each uploaded face with database - get top 1 from database for the person
+        # then we can take this top 1 and say that the person looks like the person from database
+        # we have to set some threshold for this
+    else:
+        return {'result': False, 'message': 'No photo provided'}
     return {"file_names": file_names}
