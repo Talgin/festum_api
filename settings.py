@@ -4,7 +4,7 @@ from pathlib import Path
 # to use GPU or CPU processing: True - OVMS, False - Triton Inference Server
 use_cpu = True
 # use postgre or ANNs: True - Postgres, False - FAISS
-use_postgres = True
+use_postgres = False
 # IP of the host server
 ip = '127.0.0.1'
 # http port of the GPU model server
