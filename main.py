@@ -79,7 +79,7 @@ async def upload_images(images: List[UploadFile] = File(...)):
         file_name = f"{uuid.uuid4()}.jpg"
         # with open(os.path.join(settings.CROPS_FOLDER, file_name), "wb") as f:
         #     f.write(contents)
-        file_names.append(file_name)
+        # file_names.append(file_name)
 
         # compare each uploaded face with database - get top 1 from database for the person
         # then we can take this top 1 and say that the person looks like the person from database
@@ -100,6 +100,7 @@ async def upload_images(images: List[UploadFile] = File(...)):
         
         if faces.shape[0] > 0:
             res, unique_id = utils.process_faces(img, faces, landmarks)
+            file_names.append(unique_id)
             print(res)
             '''
             match_list = {}
