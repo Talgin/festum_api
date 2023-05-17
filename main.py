@@ -21,6 +21,8 @@ from db.powerpostgre import PowerPost
 import time
 import faiss as fs
 
+import utils
+
 app = FastAPI()
 
 def create_triton_client(server, protocol, verbose, async_set, cpu_server):
@@ -74,9 +76,9 @@ async def upload_images(images: List[UploadFile] = File(...)):
         # You can use the `image.filename` attribute to get the original filename
 
         # Example: Saving the image with a unique name
-        file_name = f"image_{uuid.uuid4()}.jpg"
-        with open(os.path.join(settings.CROPS_FOLDER, file_name), "wb") as f:
-            f.write(contents)
+        file_name = f"{uuid.uuid4()}.jpg"
+        # with open(os.path.join(settings.CROPS_FOLDER, file_name), "wb") as f:
+        #     f.write(contents)
         file_names.append(file_name)
 
         # compare each uploaded face with database - get top 1 from database for the person
@@ -84,13 +86,22 @@ async def upload_images(images: List[UploadFile] = File(...)):
         # we have to set some threshold for this
 
         #print('data_type:', type(data))
-        unique_id = str(round(time.time() * 1000000))
-        name = file.filename
-        image = np.asarray(bytearray(data), dtype="uint8")
-        image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-        print('Image shape:', image.shape)
-        faces, landmarks = detector.detect(image, name, 0, settings.DETECTION_THRESHOLD)
+        # unique_id = str(round(time.time() * 1000000))
+        # name = image.filename
+        img = np.asarray(bytearray(data), dtype="uint8")
+        img = cv2.imdecode(img, cv2.IMREAD_COLOR)
+        # print('Image shape:', img.shape)
+        
+        if settings.use_cpu:
+            faces, landmarks = detector.cpu_detect(img, file_name, settings.DETECTION_THRESHOLD)
+        else:
+            faces, landmarks = detector.detect(img, file_name, 0, settings.DETECTION_THRESHOLD)
+        # print(faces.shape[0])
+        
         if faces.shape[0] > 0:
+            res, unique_id = utils.process_faces(img, faces, landmarks)
+            print(res)
+            '''
             match_list = {}
             feature_list = []
             for i in range(faces.shape[0]):
@@ -108,7 +119,7 @@ async def upload_images(images: List[UploadFile] = File(...)):
                     landmark5 = landmarks[i].astype(np.int)
                     aligned = align_img(image, landmark5)
                     # Get 512-d embedding from aligned image
-                    feature = recognizer.get_feature(aligned, unique_id+'_'+name, 0)
+                    feature = recognizer.get_feature(aligned, file_name, 0)
                     feature_list.append(feature)
                 else:
                     return {'result': False, 'message': 'Face not detected or sharp angle'}
@@ -126,9 +137,8 @@ async def upload_images(images: List[UploadFile] = File(...)):
             else:
                 message = {'result': False, 'message': 'Not found', 'name': "", 'faces': faces.shape[0]}
                 return message
+            '''
         # compare each uploaded face with database - get top 1 from database for the person
         # then we can take this top 1 and say that the person looks like the person from database
         # we have to set some threshold for this
-    else:
-        return {'result': False, 'message': 'No photo provided'}
     return {"file_names": file_names}
