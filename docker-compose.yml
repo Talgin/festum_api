@@ -1,14 +1,14 @@
 version: '3'
 services:
   festum_api:
-    image: talgin/face_api_image:v1.1
+    image: talgin/face_api_image:v1.2
     container_name: festum_api
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${PWD}:/app
-      - /home/talgat/PROJECTS/APIs/festum/crops:/crops
-      - /home/talgat/PROJECTS/APIs/festum/final_index:/final_index
+      - ${PWD}/app:/app
+      - ${PWD}/crops:/crops
+      - ${PWD}/final_index:/final_index
     working_dir: /app
     shm_size: 1g
     ulimits:
