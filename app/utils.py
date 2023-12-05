@@ -48,7 +48,7 @@ def process_faces(img, faces, landmarks):
         os.makedirs(todays_folder)
 
     img_name = str(uuid.uuid4())
-    new_img_folder = os.path.join(todays_folder, img_name)
+    new_img_folder = os.path.join(todays_folder, img_name) # unique_id of an image
     if not os.path.exists(new_img_folder):
         os.makedirs(new_img_folder)
 

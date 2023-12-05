@@ -18,8 +18,9 @@ from detection import Detector
 import settings
 import utils
 from db.powerpostgre import PowerPost
-import time
 import faiss as fs
+from pymilvus import connections, CollectionSchema, Collection
+import table_structure
 
 import utils
 
@@ -63,12 +64,18 @@ detector = Detector(triton_client, settings.use_cpu, settings.DETECTOR_SETTINGS[
 recognizer = Recognition(triton_client, settings.use_cpu, settings.RECOGNITION_SETTINGS[0], settings.RECOGNITION_SETTINGS[1], settings.RECOGNITION_SETTINGS[2], settings.RECOGNITION_SETTINGS[3], settings.RECOGNITION_SETTINGS[4])
 if settings.use_postgres:
     db_worker = PowerPost(settings.PG_CONNECTION[0], settings.PG_CONNECTION[1], settings.PG_CONNECTION[2], settings.PG_CONNECTION[3], settings.PG_CONNECTION[4])
+elif settings.use_milvus:
+    connections.connect("default", host="localhost", port="19530")
+    schema = CollectionSchema(table_structure.fields, "actors_milvus is a database of IMDB, kpop and kazakh")
+    milvus_collection = Collection(settings.milvus_schema, schema, consistency_level="Strong")
+    # Before conducting a search or a query, you need to load the data in `hello_milvus` into memory.
+    milvus_collection.load()
 else:
     faiss_index = fs.read_index(settings.FAISS_INDEX_FILE, fs.IO_FLAG_ONDISK_SAME_DIR)
 
 @app.post("/upload/images")
 async def upload_images(images: List[UploadFile] = File(...)):
-    file_names = []
+    file_names = {}
     for image in images:
         # grab the uploaded image
         data = await image.read()
@@ -100,7 +107,8 @@ async def upload_images(images: List[UploadFile] = File(...)):
         
         if faces.shape[0] > 0:
             res, unique_id = utils.process_faces(img, faces, landmarks)
-            file_names.append(unique_id)
+            # file_names.append({unique_id: res})
+            file_names[unique_id] = res
             print(res)
             '''
             match_list = {}
@@ -142,4 +150,111 @@ async def upload_images(images: List[UploadFile] = File(...)):
         # compare each uploaded face with database - get top 1 from database for the person
         # then we can take this top 1 and say that the person looks like the person from database
         # we have to set some threshold for this
-    return {"file_names": file_names}
+    return {"detections": file_names}
+
+@app.get("/detector/get_detection", status_code=200)
+async def get_detection(response: Response, date: str = Form(...), unique_id: str = Form(...), face_id: str = Form(...)):
+    file_path = os.path.join(settings.CROPS_FOLDER, date, unique_id, 'crop_'+face_id+'.jpg')
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    else:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {'result': 'error', 'message':'No such file'}
+    
+@app.post("/recognition/get_photo_metadata", status_code=200)
+async def get_photo_metadata(response: Response, date: str = Form(...), unique_id: str = Form(...), face_id: str = Form(...)):
+    img_name = 'align_'+face_id
+    file_path = os.path.join(settings.CROPS_FOLDER, date, unique_id, img_name+'.jpg')
+    if os.path.exists(file_path):
+        img = cv2.imread(file_path)
+        feature = None
+        # using either gpu or cpu to get feature - the use_cpu is in settings.py
+        if settings.use_cpu:
+            feature = recognizer.cpu_get_feature(img, unique_id+'_'+img_name)
+        else:
+            feature = recognizer.get_feature(img, unique_id+'_'+img_name, 0)
+
+        if settings.use_postgres:
+            # get top one from postgres database of people
+            db_result = db_worker.get_top_one_from_face_db(feature)
+            if len(db_result) > 0:
+                ids, distances = utils.calculate_cosine_distance(db_result, feature, settings.RECOGNITION_THRESHOLD)
+                if ids is not None:
+                    l_name = db_worker.search_from_persons(ids)
+                    return {
+                            'result': 'success',
+                            'message': {
+                                        'id': ids,
+                                        'name': l_name,
+                                        'similarity': round(distances * 100, 2)
+                                    }
+                        }
+            else:
+                response.status_code = status.HTTP_409_CONFLICT
+                return {'result': 'error', 'message': 'No IDs found'}
+        elif settings.use_milvus:
+            search_params = {
+                "metric_type": "IP",
+                "params": {"nprobe": 10},
+            }
+            result = milvus_collection.search([feature], "person_feature", search_params, limit=3, output_fields=["person_name", "person_surname", "person_middlename"])
+            result_dict = {
+                            'result': 'success',
+                            'message': {
+                                        'distance': round(result[0][0].distance, 2),
+                                        'person_id': result[0][0].id,
+                                        'surname': result[0][0].entity.get("person_surname"),
+                                        'firstname': result[0][0].entity.get("person_name"),
+                                        'secondname': result[0][0].entity.get("person_middlename")
+                                    }
+                        }
+            return result_dict
+        else:    
+            if faiss_index.ntotal > 0:
+                distances, indexes = db_worker.search_from_gbdfl_faiss_top_n(faiss_index, feature, 1)
+            else:
+                return {'result': 'error', 'message': 'FAISS index is empty.'}
+        
+            if indexes is not None:
+                ids = tuple(list(map(str,indexes[0])))
+                # ids = str(list(indexes[0]))[1:-1]
+                print("IDs", ids)
+                with_zeros = []
+                str_ids = list(map(str, indexes[0]))
+                for i in str_ids:
+                    while len(i) < 9:
+                        i = "0" + i
+                    with_zeros.append(i)
+                print('ZEROs ADDED:', with_zeros)
+                from_ud_gr = db_worker.get_blob_info_from_database(tuple(with_zeros))
+                print('FROM DATABASE:', from_ud_gr)
+                if from_ud_gr is not None:
+                    scores_val = dict(zip(list(with_zeros),list(distances[0])))
+                    print('DICTIONARY:', scores_val)
+                    for i in range(len(from_ud_gr)):
+                        dist = scores_val[from_ud_gr[i][0]]
+                        ud_code = from_ud_gr[i][0]
+                        gr_code = from_ud_gr[i][1]
+                        surname = from_ud_gr[i][2]
+                        firstname = from_ud_gr[i][3]
+                        if from_ud_gr[i][4] is None:
+                            secondname = ''
+                        else:
+                            secondname = from_ud_gr[i][4]
+                        fio = surname +' '+ firstname +' '+secondname
+                        result_dict = {
+                                        'result': 'success',
+                                        'message': {
+                                                    'distance': round(dist*100, 2),
+                                                    'person_id': gr_code,
+                                                    'surname': surname,
+                                                    'firstname': firstname,
+                                                    'secondname': secondname
+                                                }
+                                    }
+                    return result_dict
+            else:
+                return {'result': 'error', 'message': 'ud_gr is empty'}
+    else:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {'result': 'error', 'message': 'No such file. Please, check unique_id, face_id or date.'}

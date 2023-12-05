@@ -2,15 +2,18 @@ import os
 from pathlib import Path
 
 # to use GPU or CPU processing: True - OVMS, False - Triton Inference Server
-use_cpu = True
+use_cpu = False
 # use postgre or ANNs: True - Postgres, False - FAISS
 use_postgres = False
+# use Milvus Vector Database
+use_milvus = True
+milvus_schema = "actors_milvus"
 # IP of the host server
 ip = '127.0.0.1'
 # http port of the GPU model server
-gpu_http_port = '30020'
+gpu_http_port = '20020'
 # grpc port of the GPU model server
-gpu_grpc_port = '30021'
+gpu_grpc_port = '20021'
 # http port of the CPU model server
 cpu_http_port = '30024'
 # grpc port of the CPU model server
