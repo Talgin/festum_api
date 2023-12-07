@@ -19,3 +19,21 @@ services:
       - LANG=C.UTF-8
     # command: gunicorn main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:9999 --forwarded-allow-ips "*" --workers 6 --log-level debug --reload
     command: uvicorn main:app --host 0.0.0.0 --port 2222 --forwarded-allow-ips "*" --workers 2 --log-level debug --reload
+  
+ #========================================= POSTGRESDB ==========================================================
+  
+  festum_postgres:
+    image: postgres:16-bullseye
+    # build:
+    #   context: ./docker/dockerfiles/postgresdb
+    #   dockerfile: Dockerfile
+    restart: unless-stopped
+    container_name: festum_postgresdb
+    ports:
+      - "30005:5432"
+    environment:
+      POSTGRES_USER: face_reco_admin
+      POSTGRES_PASSWORD: qwerty123
+      POSTGRES_DB: face_db
+    volumes:
+      - "./docker/volume/pgdata:/var/lib/postgresql/data"

@@ -174,7 +174,7 @@ class PowerPost:
 
 
     def insert_into_persons(self, unique_id, person_name, person_surname, person_secondname, create_time, group_id, person_iin):
-        print(unique_id, person_name, person_surname, person_secondname, group_id)
+        print(unique_id, person_name, person_surname, person_secondname, group_id, person_iin)
         try:
             # connect to the PostgresQL database
             conn = psycopg2.connect(host=self.host, port=self.port, dbname=self.dbname, user=self.user, password=self.pwd)
@@ -187,8 +187,9 @@ class PowerPost:
                                 person_name,
                                 person_surname,
                                 person_secondname,
-                                create_time,
-                                group_id) VALUES (
+                                insert_date,
+                                group_id,
+                                person_iin) VALUES (
                                 %(uid)s,%(p_name)s,%(p_surname)s,%(p_sname)s,%(c_time)s,%(g_id)s,%(p_iin)s
                                 )"""
             # execute the INSERT statement
@@ -244,7 +245,7 @@ class PowerPost:
             if faiss_index.ntotal > 1000000:
                 faiss_index.nprobe = nprb
             else:
-                faiss_index.nprobe = 256
+                faiss_index.nprobe = 1024
             # print('ntotal:', faiss_index.ntotal)
             query = np.array([one_vector], dtype=np.float32)
             D, I = faiss_index.search(query, topn)
@@ -269,6 +270,38 @@ class PowerPost:
                 sql_str = "SELECT ud_code,gr_code,lastname,firstname,secondname FROM fr.unique_ud_gr WHERE ud_code = '{ids}'".format(ids=ids[0])
             else:
                 sql_str = "SELECT ud_code,gr_code,lastname,firstname,secondname FROM fr.unique_ud_gr WHERE ud_code in {ids}".format(ids=ids)
+            print(sql_str)
+            #print(sql_str)
+            cur.execute(sql_str)
+            # commit the changes to the database
+            blob = cur.fetchall()
+            print('database blob:', blob)
+            # close the communication with the PostgresQL database
+            cur.close()
+        except Exception as error:
+            print('Error: ' + str(error))
+            return None
+        finally:
+            if conn is not None:
+                conn.close()
+        return blob
+
+
+    def get_info_from_stars_database(self, ids):
+        # Search from big database according to given red_id from faiss index with face vectors
+        conn = None
+        iin = None
+        #print(ids)
+        try:
+            # connect to the PostgresQL database
+            conn = psycopg2.connect(host=self.host, port=self.port, dbname=self.dbname, user=self.user, password=self.pwd)
+            # create a new cursor object
+            cur = conn.cursor()
+            # execute the INSERT statement
+            if len(ids) == 1:
+                sql_str = "SELECT unique_id,person_surname,person_name,person_secondname FROM fr.persons WHERE unique_id = '{ids}'".format(ids=ids[0])
+            else:
+                sql_str = "SELECT unique_id,person_surname,person_name,person_secondname FROM fr.persons WHERE unique_id in {ids}".format(ids=ids)
             print(sql_str)
             #print(sql_str)
             cur.execute(sql_str)

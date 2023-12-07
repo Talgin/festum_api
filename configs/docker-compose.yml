@@ -1,0 +1,14 @@
+version: '2.4'
+services:
+  postgresdb:
+    image: talgin/face_postgresdb:v2
+    restart: unless-stopped
+    container_name: festum_postgres
+    ports:
+      - "30005:5432"
+    environment:
+      POSTGRES_USER: face_reco_admin
+      POSTGRES_PASSWORD: qwerty123
+      POSTGRES_DB: face_db
+    volumes:
+      - "./data/pgdata:/var/lib/postgresql/data"

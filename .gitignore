@@ -19,3 +19,10 @@ env.bak/
 venv.bak/
 Pipfile
 Pipfile.lock
+# Folders
+docker/
+crops/
+final_index/
+configs/data/
+configs/image/
+configs/test/

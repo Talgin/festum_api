@@ -6,7 +6,7 @@ use_cpu = False
 # use postgre or ANNs: True - Postgres, False - FAISS
 use_postgres = False
 # use Milvus Vector Database
-use_milvus = True
+use_milvus = False
 milvus_schema = "actors_milvus"
 # IP of the host server
 ip = '127.0.0.1'
@@ -50,7 +50,7 @@ pg_password = 'qwerty123'                           # os.environ['FASTAPI_PG_PAS
 # postgres connection settings: host, port, dbname, user, pwd
 PG_CONNECTION = [pg_server, pg_port, pg_db, pg_username, pg_password]
 # FAISS index settings
-FAISS_INDEX_FILE = '/final_index/populated.index'
+FAISS_INDEX_FILE = '/final_index/populated_stars.index'
 VECTOR_DIMENSIONS = 512
 INDEX_TYPE = 'IVF1,Flat'
 FAISS_THRESHOLD = 65

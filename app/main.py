@@ -62,15 +62,15 @@ def create_triton_client(server, protocol, verbose, async_set, cpu_server):
 triton_client = create_triton_client(settings.TRITON_SERVER_SETTINGS[0], settings.TRITON_SERVER_SETTINGS[1], settings.TRITON_SERVER_SETTINGS[2], settings.TRITON_SERVER_SETTINGS[3], settings.TRITON_SERVER_SETTINGS[4])
 detector = Detector(triton_client, settings.use_cpu, settings.DETECTOR_SETTINGS[0], settings.DETECTOR_SETTINGS[1], settings.DETECTOR_SETTINGS[2], settings.DETECTOR_SETTINGS[3], settings.DETECTOR_SETTINGS[4], settings.DETECTOR_SETTINGS[5], settings.DETECTOR_SETTINGS[6])
 recognizer = Recognition(triton_client, settings.use_cpu, settings.RECOGNITION_SETTINGS[0], settings.RECOGNITION_SETTINGS[1], settings.RECOGNITION_SETTINGS[2], settings.RECOGNITION_SETTINGS[3], settings.RECOGNITION_SETTINGS[4])
-if settings.use_postgres:
-    db_worker = PowerPost(settings.PG_CONNECTION[0], settings.PG_CONNECTION[1], settings.PG_CONNECTION[2], settings.PG_CONNECTION[3], settings.PG_CONNECTION[4])
-elif settings.use_milvus:
+
+if settings.use_milvus:
     connections.connect("default", host="localhost", port="19530")
     schema = CollectionSchema(table_structure.fields, "actors_milvus is a database of IMDB, kpop and kazakh")
     milvus_collection = Collection(settings.milvus_schema, schema, consistency_level="Strong")
     # Before conducting a search or a query, you need to load the data in `hello_milvus` into memory.
     milvus_collection.load()
 else:
+    db_worker = PowerPost(settings.PG_CONNECTION[0], settings.PG_CONNECTION[1], settings.PG_CONNECTION[2], settings.PG_CONNECTION[3], settings.PG_CONNECTION[4])
     faiss_index = fs.read_index(settings.FAISS_INDEX_FILE, fs.IO_FLAG_ONDISK_SAME_DIR)
 
 @app.post("/upload/images")
@@ -209,7 +209,7 @@ async def get_photo_metadata(response: Response, date: str = Form(...), unique_i
                                     }
                         }
             return result_dict
-        else:    
+        else:
             if faiss_index.ntotal > 0:
                 distances, indexes = db_worker.search_from_gbdfl_faiss_top_n(faiss_index, feature, 1)
             else:
@@ -219,34 +219,36 @@ async def get_photo_metadata(response: Response, date: str = Form(...), unique_i
                 ids = tuple(list(map(str,indexes[0])))
                 # ids = str(list(indexes[0]))[1:-1]
                 print("IDs", ids)
-                with_zeros = []
-                str_ids = list(map(str, indexes[0]))
-                for i in str_ids:
-                    while len(i) < 9:
-                        i = "0" + i
-                    with_zeros.append(i)
-                print('ZEROs ADDED:', with_zeros)
-                from_ud_gr = db_worker.get_blob_info_from_database(tuple(with_zeros))
+                from_ud_gr = db_worker.get_info_from_stars_database(ids)
+                # with_zeros = []
+                # str_ids = list(map(str, indexes[0]))
+                # for i in str_ids:
+                #     while len(i) < 9:
+                #         i = "0" + i
+                #     with_zeros.append(i)
+                # print('ZEROs ADDED:', with_zeros)
+                # from_ud_gr = db_worker.get_blob_info_from_database(tuple(with_zeros))
                 print('FROM DATABASE:', from_ud_gr)
                 if from_ud_gr is not None:
-                    scores_val = dict(zip(list(with_zeros),list(distances[0])))
+                    scores_val = dict(zip(list(ids),list(distances[0])))
                     print('DICTIONARY:', scores_val)
                     for i in range(len(from_ud_gr)):
-                        dist = scores_val[from_ud_gr[i][0]]
-                        ud_code = from_ud_gr[i][0]
-                        gr_code = from_ud_gr[i][1]
-                        surname = from_ud_gr[i][2]
-                        firstname = from_ud_gr[i][3]
-                        if from_ud_gr[i][4] is None:
+                        print(from_ud_gr[i][0])
+                        dist = scores_val[str(from_ud_gr[i][0])]
+                        unique_id = from_ud_gr[i][0]
+                        # gr_code = from_ud_gr[i][1]
+                        surname = from_ud_gr[i][1]
+                        firstname = from_ud_gr[i][2]
+                        if from_ud_gr[i][3] is None:
                             secondname = ''
                         else:
-                            secondname = from_ud_gr[i][4]
-                        fio = surname +' '+ firstname +' '+secondname
+                            secondname = from_ud_gr[i][3]
+                        # fio = surname +' '+ firstname +' '+secondname
                         result_dict = {
                                         'result': 'success',
                                         'message': {
                                                     'distance': round(dist*100, 2),
-                                                    'person_id': gr_code,
+                                                    'person_id': unique_id,
                                                     'surname': surname,
                                                     'firstname': firstname,
                                                     'secondname': secondname
